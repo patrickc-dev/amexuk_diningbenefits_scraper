@@ -85,7 +85,11 @@ def load_website(headless=True):
     
     # Wait for page to load
     print("Waiting for page to load...")
-    time.sleep(2)  # Increased wait time for dynamic content
+
+    # Dismiss Cookie Question
+    cookie_button = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "user-consent-management-granular-banner-decline-all-button")))
+    cookie_button.click()
+    
     
     # Wait for any restaurant content to appear
     try:
@@ -103,7 +107,7 @@ def load_website(headless=True):
     
     while scroll_attempts < max_scrolls:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(3)  # Increased wait between scrolls
+        time.sleep(2)  # Increased wait between scrolls
         new_height = driver.execute_script("return document.body.scrollHeight")
         if new_height == last_height:
             scroll_attempts += 1
@@ -116,7 +120,7 @@ def load_website(headless=True):
     # Scroll back to top slowly
     print("Scrolling back to top...")
     driver.execute_script("window.scrollTo(0, 0);")
-    time.sleep(2)
+    time.sleep(1)
     
     # Always save HTML for debugging
     print("\nSaving page HTML for inspection...")
@@ -170,7 +174,9 @@ def scrape_restaurants(headless=True):
                 try:
                     # Extract Name
                     name_div = restaurant_container.find_element(By.CSS_SELECTOR, "div.sc-dCFHLb")
-                    name = name_div.get_attribute("textContent")
+                    # name = name_div.get_attribute("textContent")
+                    name = name_div.text
+                    name = name.replace('\n', ' - ')
                     
                     # Find address div within the same parent
                     address_div = restaurant_container.find_elements(By.CSS_SELECTOR, "div.sc-fhzFiK")
@@ -228,7 +234,7 @@ def scrape_restaurants(headless=True):
             traceback.print_exc()
     
         
-        print(f"\nFound {len(restaurants)} restaurants after filtering")
+        print(f"Found {len(restaurants)} restaurants after filtering")
         
         return restaurants
         

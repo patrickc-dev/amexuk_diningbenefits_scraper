@@ -4,6 +4,8 @@ and save them to a CSV file.
 """
 
 from ast import parse
+from logging import raiseExceptions
+from sys import exception
 import time
 import csv
 import re
@@ -137,7 +139,67 @@ def save_page_html(driver, filename='page_source.html'):
     except Exception as e:
         print(f"Warning: Could not save HTML file: {e}")
 
+def extract_details_from_restuarant_container(restaurant_container, div_tags):
+
+    # Extract Name
+    name = ""
+    name_div = restaurant_container.find_element(By.CSS_SELECTOR, f"div.sc-{div_tags['name']}")
+    name = name_div.text
+    name = name.replace('\n', ' - ')
+    
+    # Extract Address
+    address = ""
+    address_div = restaurant_container.find_elements(By.CSS_SELECTOR, f"div.sc-{div_tags['address']}")
+    if address_div:
+        address = address_div[0].get_attribute("innerHTML").strip()
+        if debug:
+            print(address) 
+        # Replace line breaks with commas
+        address = address.replace('<br>', ', ')
+        if debug:
+            print(address) 
+    
+    # Extract Cuisine
+    cuisine = ""
+    cuisine_div = restaurant_container.find_element(By.CSS_SELECTOR, f"div.sc-{div_tags['cuisine']}")
+    if cuisine_div:
+        # Get the inner HTML to extract text after SVG
+        cuisine = cuisine_div.text
+    
+    # Find Google Maps link - it's in an <a> tag with href containing "google.com/maps"
+    google_maps_link = ""
+    map_links = restaurant_container.find_elements(By.CSS_SELECTOR, "a[href*='google.com/maps']")
+    if map_links:
+        google_maps_link = map_links[0].get_attribute('href')
+        # Decode HTML entities if any
+        if google_maps_link:
+            google_maps_link = google_maps_link.replace('&amp;', '&')
+    
+    
+    restaurant_data = {
+        'Name': name,
+        'Address': address,
+        'Cuisine': cuisine,
+        'Google_Maps_Link': google_maps_link
+    }
+
+    return restaurant_data
+
+
 def scrape_restaurants(headless=True):
+
+    location_div_tags = {
+        'restaurant': 'kOPcWz',
+        'name': 'dCFHLb',
+        'address': 'fhzFiK',
+        'cuisine': 'jxOSlx',
+    }
+    sub_location_div_tags = {
+        'restaurant': 'cPiKLX',
+        'name': 'dhKdcB',
+        'address': 'fPXMVe',
+        'cuisine': 'gFqAkR',
+    }
 
     try:        
         driver = load_website(headless=headless)
@@ -172,60 +234,11 @@ def scrape_restaurants(headless=True):
 
             for restaurant_container in restaurant_containers:
                 try:
-                    # Extract Name
-                    name_div = restaurant_container.find_element(By.CSS_SELECTOR, "div.sc-dCFHLb")
-                    # name = name_div.get_attribute("textContent")
-                    name = name_div.text
-                    name = name.replace('\n', ' - ')
-                    
-                    # Find address div within the same parent
-                    address_div = restaurant_container.find_elements(By.CSS_SELECTOR, "div.sc-fhzFiK")
-                    if address_div:
-                        address = address_div[0].get_attribute("innerHTML").strip()
-                        if debug:
-                            print(address) 
-                        # Replace line breaks with commas
-                        address = address.replace('<br>', ', ')
-                        if debug:
-                            print(address) 
-                    
-                    # Find cuisine - it's in div[class*='sc-jxOSlx'] (text after SVG)
-                    cuisine_divs = restaurant_container.find_elements(By.CSS_SELECTOR, "div.sc-jxOSlx")
-                    if cuisine_divs:
-                        # Get the inner HTML to extract text after SVG
-                        cuisine_html = cuisine_divs[0].get_attribute('innerHTML')
-                        if cuisine_html:
-                            # Extract text after the last </svg> tag
-                            cuisine_match = re.search(r'</svg>([^<]+)', cuisine_html, re.DOTALL)
-                            if cuisine_match:
-                                cuisine = cuisine_match.group(1).strip()
-                            else:
-                                # Fallback: use text content and try to clean it
-                                cuisine_text = cuisine_divs[0].text.strip()
-                                cuisine = ' '.join(cuisine_text.split())
-                        else:
-                            cuisine_text = cuisine_divs[0].text.strip()
-                            cuisine = ' '.join(cuisine_text.split())
-                    
-                    # Find Google Maps link - it's in an <a> tag with href containing "google.com/maps"
-                    map_links = restaurant_container.find_elements(By.CSS_SELECTOR, "a[href*='google.com/maps']")
-                    if map_links:
-                        google_maps_link = map_links[0].get_attribute('href')
-                        # Decode HTML entities if any
-                        if google_maps_link:
-                            google_maps_link = google_maps_link.replace('&amp;', '&')
-                    
-                    
-                    restaurant_data = {
-                        'Name': name,
-                        'Address': address,
-                        'Cuisine': cuisine,
-                        'Google_Maps_Link': google_maps_link
-                    }
-
+                    restaurant_data = extract_details_from_restuarant_container(restaurant_container, location_div_tags)
                     restaurants.append(restaurant_data)
                     
                 except Exception as e:
+                    print(f"Error extracting individual restaurant: {e}")
                     continue
                 
         except Exception as e:

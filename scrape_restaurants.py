@@ -109,7 +109,7 @@ def load_website(headless=True):
     
     while scroll_attempts < max_scrolls:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)  # Increased wait between scrolls
+        time.sleep(1)  # Increased wait between scrolls
         new_height = driver.execute_script("return document.body.scrollHeight")
         if new_height == last_height:
             scroll_attempts += 1
@@ -143,13 +143,13 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
 
     # Extract Name
     name = ""
-    name_div = restaurant_container.find_element(By.CSS_SELECTOR, f"div.sc-{div_tags['name']}")
+    name_div = restaurant_container.find_element(By.CSS_SELECTOR, div_tags['name'])
     name = name_div.text
     name = name.replace('\n', ' - ')
     
     # Extract Address
     address = ""
-    address_div = restaurant_container.find_elements(By.CSS_SELECTOR, f"div.sc-{div_tags['address']}")
+    address_div = restaurant_container.find_elements(By.CSS_SELECTOR, div_tags['address'])
     if address_div:
         address = address_div[0].get_attribute("innerHTML").strip()
         if debug:
@@ -161,7 +161,7 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
     
     # Extract Cuisine
     cuisine = ""
-    cuisine_div = restaurant_container.find_element(By.CSS_SELECTOR, f"div.sc-{div_tags['cuisine']}")
+    cuisine_div = restaurant_container.find_element(By.CSS_SELECTOR, div_tags['cuisine'])
     if cuisine_div:
         # Get the inner HTML to extract text after SVG
         cuisine = cuisine_div.text
@@ -189,16 +189,16 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
 def scrape_restaurants(headless=True):
 
     location_div_tags = {
-        'restaurant': 'kOPcWz',
-        'name': 'dCFHLb',
-        'address': 'fhzFiK',
-        'cuisine': 'jxOSlx',
+        'restaurant': 'div.sc-kOPcWz',
+        'name': 'div.sc-dCFHLb',
+        'address': 'div.sc-fhzFiK',
+        'cuisine': 'div.sc-jxOSlx',
     }
     sub_location_div_tags = {
-        'restaurant': 'cPiKLX',
-        'name': 'dhKdcB',
-        'address': 'fPXMVe',
-        'cuisine': 'gFqAkR',
+        'restaurant': 'div.sc-dhKdcB',
+        'name': 'h2.sc-eldPxv',
+        'address': 'div.sc-fPXMVe',
+        'cuisine': 'div.sc-gFqAkR',
     }
 
     try:        
@@ -215,7 +215,7 @@ def scrape_restaurants(headless=True):
         try:
             # Find divs with class containing "sc-dCFHLb" that have a flags div inside
             restaurant_containers = driver.find_elements(By.CSS_SELECTOR, "div.sc-kOPcWz")
-            print(f"Found {len(restaurant_containers)} potential name containers")
+            print(f"Found {len(restaurant_containers)} restaurant containers")
 
             if debug:
                 print("Example name container:")
@@ -234,8 +234,35 @@ def scrape_restaurants(headless=True):
 
             for restaurant_container in restaurant_containers:
                 try:
-                    restaurant_data = extract_details_from_restuarant_container(restaurant_container, location_div_tags)
-                    restaurants.append(restaurant_data)
+
+                    view_location_btn = restaurant_container.find_elements(By.CSS_SELECTOR, "button.sc-fXSgeo")
+
+                    if len(view_location_btn) > 0:
+
+                        # Open Sub Restaurant List
+                        view_location_btn[0].click()
+                        WebDriverWait(driver, 5).until(
+                            lambda d: len(d.find_elements(By.CSS_SELECTOR, sub_location_div_tags["restaurant"])) > 0
+                        )
+                        time.sleep(1)
+                        sub_restaurant_containers = driver.find_elements(By.CSS_SELECTOR, sub_location_div_tags["restaurant"])
+                        print(f"Found {len(sub_restaurant_containers)} sub-restaurant containers")
+                        for sub_restaurant_container in sub_restaurant_containers:
+                            restaurant_data = extract_details_from_restuarant_container(sub_restaurant_container, sub_location_div_tags)
+                            restaurants.append(restaurant_data)
+                        # Close Sub Restaurant List
+                        close_button = driver.find_element(By.CSS_SELECTOR, "button.sc-iHGNWf")
+                        close_button.click()
+
+                        WebDriverWait(driver, 5).until(
+                            lambda d: len(d.find_elements(By.CSS_SELECTOR, "button.sc-iHGNWf")) == 0
+                        )
+                        time.sleep(1)
+
+                    
+                    else:
+                        restaurant_data = extract_details_from_restuarant_container(restaurant_container, location_div_tags)
+                        restaurants.append(restaurant_data)
                     
                 except Exception as e:
                     print(f"Error extracting individual restaurant: {e}")

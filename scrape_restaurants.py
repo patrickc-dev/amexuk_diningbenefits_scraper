@@ -130,8 +130,52 @@ def load_website(headless=True):
 
     return driver
 
-def save_page_html(driver, filename='page_source.html'):
+def get_available_countries(driver):
+    """Get list of available country codes and names."""
+    try:
+        select = driver.find_element(By.ID, "country")
+        options = select.find_elements(By.TAG_NAME, "option")
+        countries = {}
+        for opt in options:
+            val = opt.get_attribute("value")
+            text = opt.text
+            if val and text:
+                countries[val] = text
+        return countries
+    except Exception as e:
+        print(f"Error getting available countries: {e}")
+        return {}
+
+def switch_country(driver, country_code):
+    """Switch the country dropdown."""
+    print(f"Switching to country code: {country_code}")
+    try:
+        # Use JavaScript to set value and trigger change event (as found in exploration)
+        driver.execute_script("""
+            const select = document.getElementById('country');
+            select.value = arguments[0];
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        """, country_code)
+        
+        # Wait for content to update
+        print("Waiting for content update...")
+        time.sleep(3) # Give it a moment to start loading
+        
+        # Wait for restaurant containers to be present
+        try:
+            WebDriverWait(driver, 15).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "div.sc-kOPcWz")) > 0
+            )
+        except TimeoutException:
+            print("Warning: Content update timed out or no restaurants found for this country.")
+            
+    except Exception as e:
+        print(f"Error switching country: {e}")
+        raise
+
+def save_page_html(driver, filename_params=''):
     """Always save page HTML for debugging."""
+    filename = f'page_source{filename_params}.html'
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(driver.page_source)
@@ -186,8 +230,8 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
     return restaurant_data
 
 
-def scrape_restaurants(headless=True):
-
+def scrape_restaurants(driver, country_code): 
+            
     location_div_tags = {
         'restaurant': 'div.sc-kOPcWz',
         'name': 'div.sc-dCFHLb',
@@ -202,8 +246,30 @@ def scrape_restaurants(headless=True):
     }
 
     try:        
-        driver = load_website(headless=headless)
-        print("Extracting restaurant data...")
+        # Switch to the requested country
+        switch_country(driver, country_code)
+        
+        # Scroll to load dynamic content (needs to be done AFTER switching country)
+        print("Scrolling to load all content...")
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        scroll_attempts = 0
+        max_scrolls = 20
+        
+        while scroll_attempts < max_scrolls:
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(1.5)
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                scroll_attempts += 1
+                if scroll_attempts >= 3:
+                    break
+            else:
+                scroll_attempts = 0
+            last_height = new_height
+            
+        driver.execute_script("window.scrollTo(0, 0);")
+        
+        print(f"Extracting restaurant data for {country_code}...")
         
         restaurants = []
         
@@ -216,21 +282,6 @@ def scrape_restaurants(headless=True):
             # Find divs with class containing "sc-dCFHLb" that have a flags div inside
             restaurant_containers = driver.find_elements(By.CSS_SELECTOR, "div.sc-kOPcWz")
             print(f"Found {len(restaurant_containers)} restaurant containers")
-
-            if debug:
-                print("Example name container:")
-                sample_container = restaurant_containers[1]
-                sample = sample_container.find_element(By.CSS_SELECTOR, "div.sc-dCFHLb")
-                
-
-                print("Text:")
-                print(sample.text)
-                print('textContent')
-                print(sample.get_attribute("textContent"))
-                print("Inner HTML:")
-                print(sample.get_attribute('innerHTML'))
-                print("Outer HTML:")
-                print(sample.get_attribute('outerHTML'))
 
             for restaurant_container in restaurant_containers:
                 try:
@@ -249,6 +300,7 @@ def scrape_restaurants(headless=True):
                         print(f"Found {len(sub_restaurant_containers)} sub-restaurant containers")
                         for sub_restaurant_container in sub_restaurant_containers:
                             restaurant_data = extract_details_from_restuarant_container(sub_restaurant_container, sub_location_div_tags)
+                            restaurant_data['CountryCode'] = country_code
                             restaurants.append(restaurant_data)
                         # Close Sub Restaurant List
                         close_button = driver.find_element(By.CSS_SELECTOR, "button.sc-iHGNWf")
@@ -262,6 +314,7 @@ def scrape_restaurants(headless=True):
                     
                     else:
                         restaurant_data = extract_details_from_restuarant_container(restaurant_container, location_div_tags)
+                        restaurant_data['CountryCode'] = country_code
                         restaurants.append(restaurant_data)
                     
                 except Exception as e:
@@ -274,27 +327,24 @@ def scrape_restaurants(headless=True):
             traceback.print_exc()
     
         
-        print(f"Found {len(restaurants)} restaurants after filtering")
+        print(f"Found {len(restaurants)} restaurants for {country_code}")
         
         return restaurants
         
     except Exception as e:
-        print(f"Error during scraping: {e}")
+        print(f"Error during scraping {country_code}: {e}")
         if driver:
-            save_page_html(driver)
+            save_page_html(driver, f'_{country_code}')
         raise
-    
-    finally:
-        if driver:
-            driver.quit()
-            print("Browser closed.")
 
 
-def save_to_csv(restaurants, filename='amex_restaurants.csv'):
+def save_to_csv(restaurants, country_code):
     """Save restaurant data to CSV file."""
     if not restaurants:
-        print("No restaurants to save.")
+        print(f"No restaurants to save for {country_code}.")
         return
+    
+    filename = f'amex_restaurants_{country_code}.csv'
     
     # Create DataFrame
     df = pd.DataFrame(restaurants)
@@ -316,35 +366,69 @@ def save_to_csv(restaurants, filename='amex_restaurants.csv'):
 def main():
     """Main function to run the scraper."""
     import sys
+    import argparse
     
     print("=" * 60)
     print("American Express Dining Benefit Restaurant Scraper")
     print("=" * 60)
     
-    # Check for headless flag
-    headless = '--visible' not in sys.argv
+    parser = argparse.ArgumentParser(description='Scrape AMEX Dining Benefits')
+    parser.add_argument('--visible', action='store_true', help='Run with visible browser window')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output')
+    parser.add_argument('--country', type=str, default='GB', help='Country code to scrape (e.g., GB, US, FR) or "ALL"')
+    
+    args = parser.parse_args()
+    
+    headless = not args.visible
     global debug 
-    debug = '--debug' in sys.argv
+    debug = args.debug
+    target_country = args.country.upper()
     
     if not headless:
-        print("Running in VISIBLE mode (browser window will be shown)")
-        print("Use default mode (headless) by not passing --visible flag")
+        print("Running in VISIBLE mode")
     else:
-        print("Running in HEADLESS mode (no browser window)")
-        print("Add --visible flag to see the browser window for debugging")
-    
+        print("Running in HEADLESS mode")
+
+    driver = None
     try:
-        restaurants = scrape_restaurants(headless=headless)
-        save_to_csv(restaurants)
+        # Initialize driver once
+        driver = load_website(headless=headless)
         
+        available_countries = get_available_countries(driver)
+        print(f"Available countries: {', '.join(available_countries.keys())}")
+        
+        countries_to_scrape = []
+        if target_country == 'ALL':
+            countries_to_scrape = list(available_countries.keys())
+        elif target_country in available_countries:
+            countries_to_scrape = [target_country]
+        else:
+            print(f"Error: Country '{target_country}' not found in available countries.")
+            print(f"Available: {', '.join(available_countries.keys())}")
+            return
+
+        print(f"Will scrape: {', '.join(countries_to_scrape)}")
+        
+        for code in countries_to_scrape:
+            print(f"\n--- Starting scrape for {available_countries[code]} ({code}) ---")
+            try:
+                restaurants = scrape_restaurants(driver, code)
+                save_to_csv(restaurants, code)
+            except Exception as e:
+                print(f"Failed to scrape {code}: {e}")
+                # Continue with next country
+                continue
+                
     except KeyboardInterrupt:
         print("\nScraping interrupted by user.")
     except Exception as e:
         print(f"\nAn error occurred: {e}")
         import traceback
         traceback.print_exc()
-
+    finally:
+        if driver:
+            driver.quit()
+            print("Browser closed.")
 
 if __name__ == "__main__":
     main()
-

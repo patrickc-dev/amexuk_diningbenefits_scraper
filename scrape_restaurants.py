@@ -260,13 +260,23 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
         cuisine = cuisine_div.text
     
     # Find Google Maps link - it's in an <a> tag with href containing "google.com/maps"
+    # Find Google Maps link - look for various Google Maps URL patterns
     google_maps_link = ""
-    map_links = restaurant_container.find_elements(By.CSS_SELECTOR, "a[href*='google.com/maps']")
-    if map_links:
-        google_maps_link = map_links[0].get_attribute('href')
-        # Decode HTML entities if any
-        if google_maps_link:
-            google_maps_link = google_maps_link.replace('&amp;', '&')
+    try:
+        # Get all links in the container
+        all_links = restaurant_container.find_elements(By.TAG_NAME, "a")
+        
+        for link in all_links:
+            href = link.get_attribute('href')
+            if href:
+                # Check for common Google Maps URL patterns
+                if any(x in href for x in ['google.com/maps', 'goo.gl/maps', 'maps.app.goo.gl']):
+                    google_maps_link = href
+                    # Decode HTML entities if any
+                    google_maps_link = google_maps_link.replace('&amp;', '&')
+                    break
+    except Exception as e:
+        print(f"Error extracting map link: {e}")
     
     
     restaurant_data = {

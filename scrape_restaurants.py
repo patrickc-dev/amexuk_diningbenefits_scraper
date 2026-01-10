@@ -19,6 +19,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 import urllib.robotparser
+from csv_utils import combine_amex_restaurants
 
 
 def check_robots_txt(url_to_check, user_agent='*'):
@@ -363,10 +364,15 @@ def save_to_csv(restaurants, country_code):
             print(df.head().to_string())
 
 
+
+
+    
+
 def main():
     """Main function to run the scraper."""
     import sys
     import argparse
+    import glob
     
     print("=" * 60)
     print("American Express Dining Benefit Restaurant Scraper")
@@ -376,9 +382,15 @@ def main():
     parser.add_argument('--visible', action='store_true', help='Run with visible browser window')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--country', type=str, default='GB', help='Country code to scrape (e.g., GB, US, FR) or "ALL"')
+    parser.add_argument('--combine', action='store_true', help='Combine all country CSVs into one')
     
     args = parser.parse_args()
     
+    if args.combine:
+        combine_amex_restaurants()
+        return
+
+
     headless = not args.visible
     global debug 
     debug = args.debug

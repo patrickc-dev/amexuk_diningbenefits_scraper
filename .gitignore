@@ -1,4 +1,5 @@
-/amex_restaurants.csv
 /page_source.html
 /sample_element.html
-amex_restaurants_*.csv
+/amex_restaurants*.csv
+__pycache__/
+*.pyc

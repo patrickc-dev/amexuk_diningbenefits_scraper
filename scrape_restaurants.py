@@ -280,7 +280,7 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
     return restaurant_data
 
 
-def scrape_restaurants(driver, country_code): 
+def scrape_restaurants(driver, country_code, country_name): 
             
     location_div_tags = {
         'restaurant': 'div.sc-kOPcWz',
@@ -350,6 +350,17 @@ def scrape_restaurants(driver, country_code):
                         print(f"Found {len(sub_restaurant_containers)} sub-restaurant containers")
                         for sub_restaurant_container in sub_restaurant_containers:
                             restaurant_data = extract_details_from_restuarant_container(sub_restaurant_container, sub_location_div_tags)
+                            
+                            # Format Address: Name, Address, Country Name
+                            try:
+                                current_address = restaurant_data.get('Address', '')
+                                restaurant_name = restaurant_data.get('Name', '')
+                                # Only format if we have an address
+                                if current_address:
+                                    restaurant_data['Address'] = f"{restaurant_name}, {current_address}, {country_name}"
+                            except Exception as e:
+                                print(f"Error formatting address: {e}")
+
                             restaurant_data['CountryCode'] = country_code
                             restaurants.append(restaurant_data)
                         # Close Sub Restaurant List
@@ -364,6 +375,17 @@ def scrape_restaurants(driver, country_code):
                     
                     else:
                         restaurant_data = extract_details_from_restuarant_container(restaurant_container, location_div_tags)
+                        
+                        # Format Address: Name, Address, Country Name
+                        try:
+                            current_address = restaurant_data.get('Address', '')
+                            restaurant_name = restaurant_data.get('Name', '')
+                            # Only format if we have an address
+                            if current_address:
+                                restaurant_data['Address'] = f"{restaurant_name}, {current_address}, {country_name}"
+                        except Exception as e:
+                            print(f"Error formatting address: {e}")
+
                         restaurant_data['CountryCode'] = country_code
                         restaurants.append(restaurant_data)
                     
@@ -473,7 +495,7 @@ def main():
         for code in countries_to_scrape:
             print(f"\n--- Starting scrape for {available_countries[code]} ({code}) ---")
             try:
-                restaurants = scrape_restaurants(driver, code)
+                restaurants = scrape_restaurants(driver, code, available_countries[code])
                 save_to_csv(restaurants, code)
             except Exception as e:
                 print(f"Failed to scrape {code}: {e}")

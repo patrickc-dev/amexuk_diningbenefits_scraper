@@ -3,3 +3,4 @@
 /amex_restaurants*.csv
 __pycache__/
 *.pyc
+.agent

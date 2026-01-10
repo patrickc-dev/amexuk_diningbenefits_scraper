@@ -186,12 +186,60 @@ def save_page_html(driver, filename_params=''):
 
 def extract_details_from_restuarant_container(restaurant_container, div_tags):
 
-    # Extract Name
+    # Extract Name and Status
     name = ""
-    name_div = restaurant_container.find_element(By.CSS_SELECTOR, div_tags['name'])
-    name = name_div.text
-    name = name.replace('\n', ' - ')
+    status = []
     
+    try:
+        name_div = restaurant_container.find_element(By.CSS_SELECTOR, div_tags['name'])
+        
+        # Check for NEW flag
+        try:
+            flag_div = name_div.find_element(By.ID, "flags")
+            if flag_div.text and "NEW" in flag_div.text:
+                status.append("NEW")
+        except NoSuchElementException:
+            pass
+            
+        # Check for * (asterisk)
+        # It can be in a div with class sc-Nxspf hZYjZX (based on browser inspection) or just text at the end
+        # We'll check the full text vs the display name, or look for the specific element
+        try:
+            # Based on inspection, * is in a separate div if it's the asterisk notation
+            asterisk_divs = name_div.find_elements(By.XPATH, ".//div[contains(text(), '*')]")
+            if asterisk_divs:
+                status.append("*")
+        except Exception:
+            pass
+
+        # Get the full text and clean it up
+        full_text = name_div.text
+        
+        # Remove "NEW" if we found it (it comes from the flags div text)
+        if "NEW" in status:
+            # The text usually appears as "NEW\nRestaurantName" or "NEWRestaurantName" depending on layout
+            # But name_div.text includes all visible text.
+            # We can try to get the text of valid children and subtract, or simpler:
+            # The structure is <div flags>NEW</div> TextNode <div star>*</div>
+            
+            # Let's try to get just the text node. Selenium doesn't support getting text nodes directly easily.
+            # We can replace the known parts.
+            full_text = full_text.replace("NEW", "", 1)
+            
+        if "*" in status:
+            full_text = full_text.replace("*", "", 1)
+            
+        name = full_text.strip()
+        name = name.replace('\n', ' - ') # In case there are still newlines
+        
+        # Clean up any leading/trailing " - " or whitespace resulting from replacement
+        name = name.strip(" -")
+        
+    except Exception as e:
+        print(f"Error extracting name: {e}")
+        if name_div:
+            name = name_div.text
+
     # Extract Address
     address = ""
     address_div = restaurant_container.find_elements(By.CSS_SELECTOR, div_tags['address'])
@@ -225,6 +273,7 @@ def extract_details_from_restuarant_container(restaurant_container, div_tags):
         'Name': name,
         'Address': address,
         'Cuisine': cuisine,
+        'Status': ', '.join(status),
         'Google_Maps_Link': google_maps_link
     }
 

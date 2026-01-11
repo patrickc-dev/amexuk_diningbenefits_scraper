@@ -463,12 +463,21 @@ def main():
     parser.add_argument('--visible', action='store_true', help='Run with visible browser window')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
     parser.add_argument('--country', type=str, default='GB', help='Country code to scrape (e.g., GB, US, FR) or "ALL"')
-    parser.add_argument('--combine', action='store_true', help='Combine all country CSVs into one')
+    parser.add_argument('--combine', type=str, nargs='?', const='ALL', help='Comma-separated list of country codes to combine (e.g. AT,NZ). If used without values, combines all available country CSVs.')
+    parser.add_argument('--combine-suffix', type=str, default='ALL', help='Suffix for the output combined file (e.g. Oceania). Default: ALL')
     
     args = parser.parse_args()
     
-    if args.combine:
-        combine_amex_restaurants()
+    if args.combine is not None:
+        country_list = None
+        suffix = args.combine_suffix
+        
+        # If combine has a value and it's not the 'ALL' sentinel
+        if args.combine and args.combine != 'ALL':
+            # Parse the comma-separated list
+            country_list = [c.strip().upper() for c in args.combine.split(',')]
+            
+        combine_amex_restaurants(country_codes=country_list, output_suffix=suffix)
         return
 
 

@@ -32,14 +32,36 @@ def combine_csv_files(file_paths, output_file):
         print(f"Error combining CSV files: {e}")
 
 
-def combine_amex_restaurants():
-    print("Combining all country CSV files...")
-    # Find all files matching the pattern amex_restaurants_??.csv
-    # We assume country codes are 2 letters, but let's be safe and grab anything that looks like a country file
-    # excluding the aggregate file itself if it exists (though the pattern likely won't match ALL if we look for 2 chars)
+def combine_amex_restaurants(country_codes=None, output_suffix='ALL'):
+    """
+    Combine Amex restaurant CSV files.
     
-    files = glob.glob('amex_restaurants_??.csv')
-    output_file = 'amex_restaurants_ALL.csv'
+    Args:
+        country_codes (list, optional): List of country codes to combine (e.g. ['AT', 'NZ']).
+                                        If None, combines all matching 'amex_restaurants_??.csv'.
+        output_suffix (str): Suffix for the output file. Default is 'ALL'.
+                             Output file will be 'amex_restaurants_{output_suffix}.csv'.
+    """
+    if country_codes:
+        print(f"Combining CSV files for countries: {', '.join(country_codes)}")
+        files = []
+        for code in country_codes:
+            f = f'amex_restaurants_{code}.csv'
+            # We could check if file exists here, or let combine_csv_files handle/skip it.
+            # glob might be better to verify existence, but let's just construct the list
+            # and verify existence before passing to combine_csv_files if strictness is needed.
+            # However, glob.glob with specific names works too.
+            matches = glob.glob(f)
+            if matches:
+                files.extend(matches)
+            else:
+                print(f"Warning: File for {code} not found ({f})")
+    else:
+        print("Combining all country CSV files...")
+        # Find all files matching the pattern amex_restaurants_??.csv
+        files = glob.glob('amex_restaurants_??.csv')
+    
+    output_file = f'amex_restaurants_{output_suffix}.csv'
     
     if not files:
         print("No country CSV files found to combine.")

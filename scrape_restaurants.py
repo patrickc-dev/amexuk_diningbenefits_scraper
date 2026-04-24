@@ -3,6 +3,9 @@ Script to scrape restaurants from American Express UK Dining Benefit page
 and save them to a CSV file.
 """
 
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
+
 from ast import parse
 from logging import raiseExceptions
 from sys import exception
